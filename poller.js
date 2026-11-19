@@ -121,21 +121,23 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let hostAlive = false;
   const hbUrl = process.env.HOST_HB_URL || '';
   const gtoken = (process.env.GITHUB_TOKEN || '').trim();
+  log('心跳配置 hbUrl=', hbUrl ? '有' : '无', ' token=', gtoken ? '有(' + gtoken.length + ')' : '无');
   if (hbUrl && gtoken) {
     const r = await new Promise((resolve) => {
       const req = https.get(hbUrl, { headers: { Authorization: 'Bearer ' + gtoken, Accept: 'application/vnd.github.raw' }, timeout: 10000 }, (res) => {
         let d = ''; res.on('data', (c) => (d += c)); res.on('end', () => resolve({ status: res.statusCode, d }));
       });
-      req.on('timeout', () => { req.destroy(); resolve({ status: 0 }); });
-      req.on('error', () => resolve({ status: 0 }));
+      req.on('timeout', () => { req.destroy(); resolve({ status: 0, d: 'timeout' }); });
+      req.on('error', (e) => resolve({ status: 0, d: e.code || e.message }));
     });
+    log('心跳 HTTP', r.status, ' body=', JSON.stringify(String(r.d).slice(0, 120)));
     if (r.status === 200) {
       try {
         const j = JSON.parse(r.d);
         const age = Date.now() - new Date(j.ts).getTime();
         hostAlive = Number.isFinite(age) && age < 12 * 60 * 1000;
         log('云主机心跳距今', Math.round(age / 1000) + 's，在线=', hostAlive);
-      } catch (e) { log('心跳解析失败'); }
+      } catch (e) { log('心跳解析失败', e.message); }
     }
   }
 
