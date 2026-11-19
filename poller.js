@@ -124,7 +124,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   log('心跳配置 hbUrl=', hbUrl ? '有' : '无', ' token=', gtoken ? '有(' + gtoken.length + ')' : '无');
   if (hbUrl && gtoken) {
     const r = await new Promise((resolve) => {
-      const req = https.get(hbUrl, { headers: { Authorization: 'Bearer ' + gtoken, Accept: 'application/vnd.github.raw' }, timeout: 10000 }, (res) => {
+      const req = https.get(hbUrl, { headers: { Authorization: 'Bearer ' + gtoken, Accept: 'application/vnd.github.raw', 'User-Agent': 'watch-poller/1.0' }, timeout: 10000 }, (res) => {
         let d = ''; res.on('data', (c) => (d += c)); res.on('end', () => resolve({ status: res.statusCode, d }));
       });
       req.on('timeout', () => { req.destroy(); resolve({ status: 0, d: 'timeout' }); });
