@@ -4,7 +4,7 @@
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
-const ImClient = require('./lib/im');
+const { ImClient } = require('./lib/im');
 
 const USER_IM_ID = 211719271;          // 手表端（唯一要服务的对象）
 const STATE_FILE = path.join(__dirname, 'state.json');
