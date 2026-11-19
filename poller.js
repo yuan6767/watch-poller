@@ -172,9 +172,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await sleep(COLLECT_MS - 4000 * 2);
 
   const nowSec = Math.floor(Date.now() / 1000);
+  const minAge = hostAlive ? REPLY_WINDOW_MIN : 0.5;   // 云主机在线才等 6 分钟避让；云主机死了立刻能回
   const ripe = got.filter((x) => {
     const age = x.ts ? (nowSec - x.ts) / 60 : 999;
-    return x.ts ? (age >= REPLY_WINDOW_MIN && age <= MAX_AGE_MIN) : false;
+    return x.ts ? (age >= minAge && age <= MAX_AGE_MIN) : false;
   });
   log('本轮收到', got.length, '条；落在可回窗口内', ripe.length, '条；云主机在线=', hostAlive);
 
