@@ -13,7 +13,7 @@ const REPLY_WINDOW_MIN = 6;            // 至少 6 分钟前才回，避免和�
 const MAX_AGE_MIN = 45;                // 超过 45 分钟的不再回，避免把积压的旧消息逐条回复
 const COLLECT_MS = 16000;              // 连上后收集消息的时长
 const MAX_REPLY = 3;                   // 单次最多回几条，防止刷屏
-const FORCE_MINUTES = 30;              // /切换 后云端强制接管多久
+const FORCE_MINUTES = 60;   // /切换 后云端强制接管多久（和本地暂停时长保持一致）              // /切换 后云端强制接管多久
 
 // —— 和云主机桥接完全同源的人设，外加云端通道的能力边界补充 ——
 let sysPrompt = '你是手表上的AI智能体。用户是六年级男生，叫六七，六九班，喜欢软硬件折腾。';
@@ -148,7 +148,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       try {
         const j = JSON.parse(r.d);
         const age = Date.now() - new Date(j.ts).getTime();
-        hostAlive = Number.isFinite(age) && age < 12 * 60 * 1000;
+        hostAlive = Number.isFinite(age) && age < 7 * 60 * 1000;
         log('云主机心跳距今', Math.round(age / 1000) + 's，在线=', hostAlive);
       } catch (e) { log('心跳解析失败', e.message); }
     } else {
@@ -159,6 +159,15 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let forceUntil = Number(st.forceCloudUntil || 0);
   const forced = forceUntil > Date.now();
   log('强制接管状态：', forced ? ('开，剩 ' + Math.round((forceUntil - Date.now()) / 60000) + ' 分钟') : '关');
+
+  // ★关键：本地在线、又没被要求接管时，一轮都不连 IM。
+  // 以前每轮都连、都 sync，会把消息从服务端「读走」并推进 syncKey，
+  // 结果桥接再上线就永远收不到那条了 —— 用户看到的「发了没人回」就是这么来的。
+  if (hostAlive && !forced) {
+    log('本地在线且没要求强制接管，本轮不连 IM（消息留给桥接）');
+    try { fs.writeFileSync(STATE_FILE, JSON.stringify(Object.assign({}, st, { updated: new Date().toISOString(), hostAlive, forceCloudUntil: 0 }), null, 2)); } catch (e) {}
+    process.exit(0);
+  }
 
   const c = new ImClient(cfg);
   const got = [];
@@ -222,7 +231,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const forceNow = forceUntil > Date.now();
 
   // —— 第二优先：普通消息 ——
-  const minAge = hostAlive ? REPLY_WINDOW_MIN : 0.1;
+  const minAge = (hostAlive && !forceNow) ? REPLY_WINDOW_MIN : 0.1;   // 接管模式下立刻回，不再避让
   const ripe = got.filter((x) => withinWindow(x) && !(SWITCH_RE.test(x.text) || BACK_RE.test(x.text) || HELP_RE.test(x.text)))
     .filter((x) => {
       const age = (nowSec - x.ts) / 60;
