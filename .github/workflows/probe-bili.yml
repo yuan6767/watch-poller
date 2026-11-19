@@ -11,6 +11,6 @@ jobs:
         with:
           node-version: '20'
       - name: 探测 B站 / 网易云
-        run: node scripts/probe-bili3.js
+        run: node scripts/probe-bili4.js
         env:
           BILI_COOKIE: ${{ secrets.BILI_COOKIE }}
