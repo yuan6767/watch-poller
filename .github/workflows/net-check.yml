@@ -1,0 +1,18 @@
+name: net-check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 检查 GitHub 到 IM / AI 的连通性
+        env:
+          ZHIPU_KEY: ${{ secrets.ZHIPU_KEY }}
+        run: node scripts/net-check.js
