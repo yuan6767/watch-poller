@@ -37,7 +37,7 @@ jobs:
           if [ -f state.json ]; then
             git config user.name "watch-poller"
             git config user.email "poller@users.noreply.github.com"
-            git add state.json
+            git add -f state.json
             git diff --cached --quiet || git commit -m "sync state $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             git push || echo "push skipped"
           fi

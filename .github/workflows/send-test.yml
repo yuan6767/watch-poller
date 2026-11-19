@@ -1,0 +1,15 @@
+name: send-test
+on: workflow_dispatch
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 向手表发一条测试消息
+        run: node scripts/send-test.js
+        env:
+          IM_CONFIG_JSON: ${{ secrets.IM_CONFIG_JSON }}
