@@ -1,0 +1,16 @@
+name: ai-test
+on: workflow_dispatch
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 测试 AI 通道
+        run: node scripts/ai-test.js
+        env:
+          CLOUDFLARE_CONFIG_JSON: ${{ secrets.CLOUDFLARE_CONFIG_JSON }}
+          ZHIPU_KEY: ${{ secrets.ZHIPU_KEY }}
