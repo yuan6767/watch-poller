@@ -26,6 +26,7 @@ jobs:
       - name: 连 IM 拉未读并用 AI 回复
         env:
           IM_CONFIG_JSON: ${{ secrets.IM_CONFIG_JSON }}
+          CLOUDFLARE_CONFIG_JSON: ${{ secrets.CLOUDFLARE_CONFIG_JSON }}
           ZHIPU_KEY: ${{ secrets.ZHIPU_KEY }}
           HOST_HB_URL: ${{ secrets.HOST_HB_URL }}
           GITHUB_TOKEN: ${{ github.token }}
