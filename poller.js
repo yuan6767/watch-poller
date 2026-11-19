@@ -8,17 +8,26 @@ const { ImClient } = require('./lib/im');
 
 const USER_IM_ID = 211719271;          // 手表端（唯一要服务的对象）
 const STATE_FILE = path.join(__dirname, 'state.json');
+const PROMPT_FILE = path.join(__dirname, 'sys_prompt.txt');
 const REPLY_WINDOW_MIN = 6;            // 至少 6 分钟前才回，避免和云主机实时桥接抢答
 const MAX_AGE_MIN = 45;                // 超过 45 分钟的不再回，避免把积压的旧消息逐条回复
 const COLLECT_MS = 16000;              // 连上后收集消息的时长
 const MAX_REPLY = 3;                   // 单次最多回几条，防止刷屏
+const FORCE_MINUTES = 30;              // /切换 后云端强制接管多久
 
-const sysPrompt = [
-  '你是用户手表上的 AI 助手，对面是一个六年级男孩（昵称作者/6767），说话直白、口语、不啰嗦，不用 emoji 之外的装饰。',
-  '回答控制在 150 字以内，手表屏幕小，越短越好。',
-  '如果对方问「你在吗/还活着吗」，直接说「我在，这条是从云端回的」。',
-  '你只能聊天，做不到发视频、打开软件、查云主机进程、点歌这些，做不到就直接说做不到，别编。',
-].join('');
+// —— 和云主机桥接完全同源的人设，外加云端通道的能力边界补充 ——
+let sysPrompt = '你是手表上的AI智能体。用户是六年级男生，叫六七，六九班，喜欢软硬件折腾。';
+try {
+  sysPrompt = fs.readFileSync(PROMPT_FILE, 'utf8');
+} catch (e) {
+  console.log('读人设文件失败，用简版', e.message);
+}
+sysPrompt += '\n【云端通道补充】你现在跑在云端，只能发纯文字。发视频、点歌、画图、查电脑进程、开关软件这些你都做不到，有人问就直接说现在做不到，别编、别装作做了。';
+
+// —— 斜杠命令 ——
+const SWITCH_RE = /^[\/／]\s*(切换|切到云端|云端|switch|cloud)\s*$/i;
+const BACK_RE = /^[\/／]\s*(切回|切回本地|本地|back|local)\s*$/i;
+const HELP_RE = /^[\/／]\s*(help|帮助|命令)\s*$/i;
 
 function log(...a) { console.log(new Date().toISOString(), ...a); }
 
@@ -55,10 +64,15 @@ function postJson(host, p, headers, obj, timeout = 30000) {
 }
 
 function clean(t) {
-  return String(t)
+  let s = String(t)
+    .replace(/^[\s\S]*?<\/[^>]*think[^>]*>/i, '')
+    .replace(/<\/?[^>]*think[^>]*>/gi, '')
     .replace(/\*\*/g, '').replace(/`/g, '')
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFD]/g, '')
-    .replace(/\n{3,}/g, '\n\n').trim();
+    .replace(/([^。！？!?\n]{4,40}[。！？!?])(?:\s*\1)+/g, '$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return s;
 }
 
 function readJsonEnv(name) {
@@ -118,10 +132,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   cfg.imSyncKey = Number(process.env.FORCE_SYNC_KEY || st.imSyncKey || cfg.imSyncKey || 0);
 
   // 云主机心跳：新鲜 → 云主机在线 → 只消费不回复，避免重复答话
+  // 例外：用户发过 /切换，forceCloudUntil 未过期 → 不管云主机活不活都由云端接
   let hostAlive = false;
   const hbUrl = process.env.HOST_HB_URL || '';
   const gtoken = (process.env.GITHUB_TOKEN || '').trim();
-  log('心跳配置 hbUrl=', hbUrl ? '有' : '无', ' token=', gtoken ? '有(' + gtoken.length + ')' : '无');
   if (hbUrl && gtoken) {
     const r = await new Promise((resolve) => {
       const req = https.get(hbUrl, { headers: { Authorization: 'Bearer ' + gtoken, Accept: 'application/vnd.github.raw', 'User-Agent': 'watch-poller/1.0' }, timeout: 10000 }, (res) => {
@@ -130,7 +144,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       req.on('timeout', () => { req.destroy(); resolve({ status: 0, d: 'timeout' }); });
       req.on('error', (e) => resolve({ status: 0, d: e.code || e.message }));
     });
-    log('心跳 HTTP', r.status, ' body=', JSON.stringify(String(r.d).slice(0, 120)));
     if (r.status === 200) {
       try {
         const j = JSON.parse(r.d);
@@ -138,8 +151,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         hostAlive = Number.isFinite(age) && age < 12 * 60 * 1000;
         log('云主机心跳距今', Math.round(age / 1000) + 's，在线=', hostAlive);
       } catch (e) { log('心跳解析失败', e.message); }
+    } else {
+      log('心跳读失败', r.status, String(r.d).slice(0, 80));
     }
   }
+
+  let forceUntil = Number(st.forceCloudUntil || 0);
+  const forced = forceUntil > Date.now();
+  log('强制接管状态：', forced ? ('开，剩 ' + Math.round((forceUntil - Date.now()) / 60000) + ' 分钟') : '关');
 
   const c = new ImClient(cfg);
   const got = [];
@@ -160,7 +179,6 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   log('连接 IM…', '起始 syncKey=', cfg.imSyncKey);
   try { await c.connect(); } catch (e) { log('连接失败', e.message); process.exit(3); }
-  log('已上线，开始多轮拉取未读');
 
   let lastKey = -1;
   for (let i = 0; i < 6; i++) {
@@ -169,17 +187,51 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (c.syncKey === lastKey) break;
     lastKey = c.syncKey;
   }
-  await sleep(COLLECT_MS - 4000 * 2);
+  await sleep(Math.max(2000, COLLECT_MS - 4000 * 6));
 
   const nowSec = Math.floor(Date.now() / 1000);
-  const minAge = hostAlive ? REPLY_WINDOW_MIN : 0.1;   // 云主机在线才等 6 分钟避让；云主机死了立刻能回
-  const ripe = got.filter((x) => {
-    const age = x.ts ? (nowSec - x.ts) / 60 : 999;
-    return x.ts ? (age >= minAge && age <= MAX_AGE_MIN) : false;
-  });
-  log('本轮收到', got.length, '条；落在可回窗口内', ripe.length, '条；云主机在线=', hostAlive);
+  const withinWindow = (x) => {
+    if (!x.ts) return false;
+    const ageMin = (nowSec - x.ts) / 60;
+    return ageMin <= MAX_AGE_MIN;
+  };
 
-  if (ripe.length && !hostAlive) {
+  // —— 第一优先：斜杠命令（只要在 45 分钟窗口内，立刻执行，不等 minAge）——
+  let handled = false;
+  const cmdMsgs = got.filter((x) => withinWindow(x) && (SWITCH_RE.test(x.text) || BACK_RE.test(x.text) || HELP_RE.test(x.text)));
+  if (cmdMsgs.length) {
+    const m = cmdMsgs[cmdMsgs.length - 1];
+    try {
+      if (SWITCH_RE.test(m.text)) {
+        forceUntil = Date.now() + FORCE_MINUTES * 60 * 1000;
+        await c.sendText(USER_IM_ID, '收到，云端接管 ' + FORCE_MINUTES + ' 分钟。这段时间不管本地通不通，都由我来回你。想还回去就发 /切回。');
+        log('命令执行：切到云端', FORCE_MINUTES + '分钟');
+      } else if (BACK_RE.test(m.text)) {
+        forceUntil = 0;
+        await c.sendText(USER_IM_ID, '好，交回本地了。本地通道可能要等一会儿才彻底回来，这期间还是我陪你。');
+        log('命令执行：切回本地');
+      } else {
+        await c.sendText(USER_IM_ID, '可用命令：\n/切换 — 让云端接管 30 分钟\n/切回 — 交还本地通道\n/help — 看这个');
+        log('命令执行：帮助');
+      }
+      handled = true;
+      await sleep(1200);
+    } catch (e) { log('命令回复失败', e.message); }
+  }
+
+  const forceNow = forceUntil > Date.now();
+
+  // —— 第二优先：普通消息 ——
+  const minAge = hostAlive ? REPLY_WINDOW_MIN : 0.1;
+  const ripe = got.filter((x) => withinWindow(x) && !(SWITCH_RE.test(x.text) || BACK_RE.test(x.text) || HELP_RE.test(x.text)))
+    .filter((x) => {
+      const age = (nowSec - x.ts) / 60;
+      return age >= minAge;
+    });
+
+  log('本轮收到', got.length, '条；可回', ripe.length, '条；云主机在线=', hostAlive, '强制接管=', forceNow, '已处理命令=', handled);
+
+  if (ripe.length && (!hostAlive || forceNow)) {
     for (const m of ripe.slice(-MAX_REPLY)) {
       const r = await askAI(m.text);
       if (r.text) {
@@ -192,12 +244,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         log('AI 全线失败', r.err || '');
       }
     }
-  } else if (hostAlive) {
+  } else if (hostAlive && !forceNow && ripe.length) {
     log('云主机在线，跳过回复（消息仍已消费）');
   }
 
   const nextKey = Number(c.syncKey || cfg.imSyncKey || 0);
-  saveState({ imSyncKey: nextKey, updated: new Date().toISOString(), got: got.length, ripe: ripe.length, hostAlive });
+  saveState(Object.assign({}, st, {
+    imSyncKey: nextKey,
+    updated: new Date().toISOString(),
+    got: got.length,
+    ripe: ripe.length,
+    hostAlive,
+    forceCloudUntil: forceUntil,
+  }));
   log('结束，syncKey', cfg.imSyncKey, '->', nextKey);
 
   try { c.sock && c.sock.destroy(); } catch (e) {}
