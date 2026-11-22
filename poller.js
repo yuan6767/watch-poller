@@ -10,7 +10,7 @@ const USER_IM_ID = 211719271;          // 手表端（唯一要服务的对象�
 const STATE_FILE = path.join(__dirname, 'state.json');
 const PROMPT_FILE = path.join(__dirname, 'sys_prompt.txt');
 const REPLY_WINDOW_MIN = 6;            // 至少 6 分钟前才回，避免和云主机实时桥接抢答
-const MAX_AGE_MIN = 45;                // 超过 45 分钟的不再回，避免把积压的旧消息逐条回复
+const MAX_AGE_MIN = 90;                // 超过 90 分钟的不再回，避免把积压的旧消息逐条回复
 const COLLECT_MS = 16000;              // 连上后收集消息的时长
 const MAX_REPLY = 3;                   // 单次最多回几条，防止刷屏
 const FORCE_MINUTES = 60;   // /切换 后云端强制接管多久（和本地暂停时长保持一致）              // /切换 后云端强制接管多久
@@ -240,7 +240,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         await c.sendText(USER_IM_ID, '好，交回本地了。本地通道可能要等一会儿才彻底回来，这期间还是我陪你。');
         log('命令执行：切回本地');
       } else {
-        await c.sendText(USER_IM_ID, '可用命令：\n/切换 — 让云端接管 30 分钟\n/切回 — 交还本地通道\n/help — 看这个');
+        await c.sendText(USER_IM_ID, '可用命令：\n/切换 — 让云端接管 ' + FORCE_MINUTES + ' 分钟\n/切回 — 交还本地通道\n/help — 看这个');
         log('命令执行：帮助');
       }
       handled = true;
