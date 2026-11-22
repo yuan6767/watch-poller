@@ -1,0 +1,22 @@
+name: die-notice
+# 云端炸了时由云主机或 poller 触发，用独立账号直接发一条到手表
+on:
+  workflow_dispatch:
+    inputs:
+      msg:
+        description: '要发到手表的内容'
+        required: true
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: 发临死留言
+        env:
+          IM_CONFIG_JSON: ${{ secrets.IM_CONFIG_JSON }}
+          MSG: ${{ inputs.msg }}
+        run: node scripts/die-notice.js
