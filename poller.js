@@ -134,6 +134,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // 云主机心跳：新鲜 → 云主机在线 → 只消费不回复，避免重复答话
   // 例外：用户发过 /切换，forceCloudUntil 未过期 → 不管云主机活不活都由云端接
   let hostAlive = false;
+  let hbAgeMs = null;
   const hbUrl = process.env.HOST_HB_URL || '';
   const gtoken = (process.env.GITHUB_TOKEN || '').trim();
   if (hbUrl && gtoken) {
@@ -148,12 +149,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       try {
         const j = JSON.parse(r.d);
         const age = Date.now() - new Date(j.ts).getTime();
+        hbAgeMs = Number.isFinite(age) ? age : null;
         hostAlive = Number.isFinite(age) && age < 7 * 60 * 1000;
         log('云主机心跳距今', Math.round(age / 1000) + 's，在线=', hostAlive);
       } catch (e) { log('心跳解析失败', e.message); }
     } else {
       log('心跳读失败', r.status, String(r.d).slice(0, 80));
     }
+  }
+
+  // 云端心跳停了 ≥15 分钟 → 判为「云端炸了」，每 2 小时最多喊一次
+  let dieNotice = false;
+  if (!hostAlive && hbAgeMs !== null && hbAgeMs > 15 * 60 * 1000) {
+    const lastDie = Number(st.lastDieNotice || 0);
+    if (Date.now() - lastDie > 2 * 60 * 60 * 1000) dieNotice = true;
+    log('云端炸了判定：心跳停了', Math.round(hbAgeMs / 1000) + 's，本轮是否播报=', dieNotice);
   }
 
   let forceUntil = Number(st.forceCloudUntil || 0);
@@ -197,6 +207,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     lastKey = c.syncKey;
   }
   await sleep(Math.max(2000, COLLECT_MS - 4000 * 6));
+
+  // 云端炸了的预告：连上 IM 先喊一条，再走正常流程
+  if (dieNotice) {
+    try {
+      await c.sendText(USER_IM_ID, '⚠️ 云端炸了：云主机心跳停了十几分钟，我现在是 GitHub 备用通道。文字能收发，发图/视频/点歌/看电脑这些做不了。云端恢复后自动交还。这条每 2 小时最多发一次。');
+      log('已发「云端炸了」预告');
+      st.lastDieNotice = Date.now();
+    } catch (e) { log('预告发送失败', e.message); }
+    await sleep(1500);
+  }
 
   const nowSec = Math.floor(Date.now() / 1000);
   const withinWindow = (x) => {
