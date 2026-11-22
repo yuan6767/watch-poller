@@ -31,18 +31,6 @@ function post(host, p, headers, obj, timeout = 30000) {
     { role: 'system', content: '你是手表上的 AI 助手，说话直白简短，100 字以内。' },
     { role: 'user', content: '你在吗？用一句话回我。' },
   ];
-  const gh = (process.env.GH_MODELS_TOKEN || '').trim();
-  if (gh) {
-    for (const model of ['openai/gpt-4o-mini', 'openai/gpt-4.1-mini']) {
-      const t = Date.now();
-      const r = await post('models.github.ai', '/inference/chat/completions',
-        { Authorization: 'Bearer ' + gh, 'X-GitHub-Api-Version': '2022-11-28', Accept: 'application/json' },
-        { model, messages: msgs, max_tokens: 300, temperature: 0.5, stream: false }, 30000);
-      console.log(`[GH] ${model} ${Date.now() - t}ms →`, JSON.stringify(r));
-      if (r.text) { console.log('✅ GitHub Models 可用'); process.exit(0); }
-    }
-  }
-
   const cf = JSON.parse(process.env.CLOUDFLARE_CONFIG_JSON || '{}');
   console.log('Cloudflare 配置:', cf.accountId ? '有 accountId' : '无', '|', cf.apiToken ? '有 token' : '无', '| model=', cf.model);
 
