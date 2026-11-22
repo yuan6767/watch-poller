@@ -150,8 +150,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         const j = JSON.parse(r.d);
         const age = Date.now() - new Date(j.ts).getTime();
         hbAgeMs = Number.isFinite(age) ? age : null;
-        hostAlive = Number.isFinite(age) && age < 7 * 60 * 1000;
-        log('云主机心跳距今', Math.round(age / 1000) + 's，在线=', hostAlive);
+        // 心跳里的 bridge 字段必须为 true 才算在线：容器活着但桥接死了时，
+        // hb_push 仍会每 5 分钟刷新 ts，只看时间会让 GitHub 永远不接管。
+        const bridgeOk = j.bridge !== false;
+        hostAlive = Number.isFinite(age) && age < 7 * 60 * 1000 && bridgeOk;
+        log('云主机心跳距今', Math.round(age / 1000) + 's，bridge=' + (bridgeOk ? 'true' : 'false') + '，在线=', hostAlive);
       } catch (e) { log('心跳解析失败', e.message); }
     } else {
       log('心跳读失败', r.status, String(r.d).slice(0, 80));
