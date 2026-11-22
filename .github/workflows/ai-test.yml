@@ -15,5 +15,5 @@ jobs:
         run: node scripts/ai-test.js
         env:
           CLOUDFLARE_CONFIG_JSON: ${{ secrets.CLOUDFLARE_CONFIG_JSON }}
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_MODELS_TOKEN: ${{ github.token }}
           ZHIPU_KEY: ${{ secrets.ZHIPU_KEY }}

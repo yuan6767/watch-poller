@@ -30,6 +30,7 @@ jobs:
           CLOUDFLARE_CONFIG_JSON: ${{ secrets.CLOUDFLARE_CONFIG_JSON }}
           ZHIPU_KEY: ${{ secrets.ZHIPU_KEY }}
           HOST_HB_URL: ${{ secrets.HOST_HB_URL }}
+          GH_MODELS_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: node poller.js
 

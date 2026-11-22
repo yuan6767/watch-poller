@@ -106,7 +106,7 @@ async function askAI(text) {
   }
 
   // 2) GitHub Models —— Actions 自带 GITHUB_TOKEN，免费额度，不用额外注册
-  const ghm = (process.env.GITHUB_TOKEN || '').trim();
+  const ghm = (process.env.GH_MODELS_TOKEN || '').trim();
   if (ghm) {
     for (const model of ['openai/gpt-4o-mini', 'openai/gpt-4.1-mini']) {
       const r = await postJson('models.github.ai', '/inference/chat/completions',
@@ -147,7 +147,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let hostAlive = false;
   let hbAgeMs = null;
   const hbUrl = process.env.HOST_HB_URL || '';
-  const gtoken = (process.env.GITHUB_TOKEN || '').trim();
+  const gtoken = (process.env.GH_MODELS_TOKEN || '').trim();
   if (hbUrl && gtoken) {
     const r = await new Promise((resolve) => {
       const req = https.get(hbUrl, { headers: { Authorization: 'Bearer ' + gtoken, Accept: 'application/vnd.github.raw', 'User-Agent': 'watch-poller/1.0' }, timeout: 10000 }, (res) => {

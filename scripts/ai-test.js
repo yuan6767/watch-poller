@@ -31,7 +31,7 @@ function post(host, p, headers, obj, timeout = 30000) {
     { role: 'system', content: '你是手表上的 AI 助手，说话直白简短，100 字以内。' },
     { role: 'user', content: '你在吗？用一句话回我。' },
   ];
-  const gh = (process.env.GITHUB_TOKEN || '').trim();
+  const gh = (process.env.GH_MODELS_TOKEN || '').trim();
   if (gh) {
     for (const model of ['openai/gpt-4o-mini', 'openai/gpt-4.1-mini']) {
       const t = Date.now();
