@@ -4,6 +4,8 @@ jobs:
   t:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      models: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -13,4 +15,5 @@ jobs:
         run: node scripts/ai-test.js
         env:
           CLOUDFLARE_CONFIG_JSON: ${{ secrets.CLOUDFLARE_CONFIG_JSON }}
+          GITHUB_TOKEN: ${{ github.token }}
           ZHIPU_KEY: ${{ secrets.ZHIPU_KEY }}
