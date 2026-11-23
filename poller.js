@@ -161,12 +161,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     }
   }
 
-  // 云端心跳停了 ≥15 分钟 → 判为「云端炸了」，每 2 小时最多喊一次
+  // 云端心跳停了 ≥15 分钟 → 判为「云端窗口断开」，每 2 小时最多喊一次
   let dieNotice = false;
   if (!hostAlive && hbAgeMs !== null && hbAgeMs > 15 * 60 * 1000) {
     const lastDie = Number(st.lastDieNotice || 0);
     if (Date.now() - lastDie > 2 * 60 * 60 * 1000) dieNotice = true;
-    log('云端炸了判定：心跳停了', Math.round(hbAgeMs / 1000) + 's，本轮是否播报=', dieNotice);
+    log('窗口断开判定：心跳停了', Math.round(hbAgeMs / 1000) + 's，本轮是否播报=', dieNotice);
   }
 
   let forceUntil = Number(st.forceCloudUntil || 0);
@@ -211,11 +211,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
   await sleep(Math.max(2000, COLLECT_MS - 4000 * 6));
 
-  // 云端炸了的预告：连上 IM 先喊一条，再走正常流程
+  // 窗口断开的预告：连上 IM 先喊一条，再走正常流程
   if (dieNotice) {
     try {
-      await c.sendText(USER_IM_ID, '⚠️ 云端炸了：云主机心跳停了十几分钟，我现在是 GitHub 备用通道。文字能收发，发图/视频/点歌/看电脑这些做不了。云端恢复后自动交还。这条每 2 小时最多发一次。');
-      log('已发「云端炸了」预告');
+      await c.sendText(USER_IM_ID, '⚠️ 云主机窗口断了：超过 15 分钟没心跳，我现在是 GitHub 备用通道。多半是每小时任务窗口结束，不一定 token 失效。文字能收发，发图/视频/点歌/看电脑这些做不了。云端恢复后自动交还。');
+      log('已发「窗口断开」预告');
       st.lastDieNotice = Date.now();
     } catch (e) { log('预告发送失败', e.message); }
     await sleep(1500);
