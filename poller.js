@@ -80,9 +80,11 @@ function readJsonEnv(name) {
 }
 
 async function askAI(text) {
+  // 手表发来的 /ds 是通道前缀，不是问题的一部分。
+  const question = String(text || '').replace(/^[\/／]\s*(?:ds|DS)\s*/, '').trim() || String(text || '').trim();
   const messages = [
     { role: 'system', content: sysPrompt },
-    { role: 'user', content: text },
+    { role: 'user', content: question },
   ];
 
   // 1) Cloudflare Workers AI —— 美国节点，GitHub runner 访问快
@@ -184,6 +186,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const c = new ImClient(cfg);
   const got = [];
+  const runNowSec = Math.floor(Date.now() / 1000);
   c.on('message', (m) => {
     try {
       if (Number(m.imAccountId) === Number(c.imAccountId)) return;
@@ -193,8 +196,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const text = String(body.text || '').trim();
       if (!text) return;
       if (/收到一条表情消息|版本升级后可查看|APP版本过低|版本过低|不支持查看/.test(text)) return;
-      got.push({ msgId: m.msgId, text, ts: m.createTime || 0 });
-      log('收到', JSON.stringify(text.slice(0, 40)));
+      // createTime 可能是秒、毫秒，也可能缺失。缺失或异常时按本轮收到时刻计，
+      // 否则 withinWindow 会把它判成“太旧”而静默消费掉（16:52 那条 /ds 就是这样丢的）。
+      let ts = Number(m.createTime) || 0;
+      if (ts > 1e12) ts = Math.floor(ts / 1000);
+      const tsMissing = !ts;
+      got.push({ msgId: m.msgId, text, ts: ts || runNowSec, tsMissing });
+      log('收到', JSON.stringify(text.slice(0, 40)), 'ts=', m.createTime || 0, tsMissing ? '(缺失，按本轮时刻计)' : '');
     } catch (e) { log('消息解析异常', e.message); }
   });
   c.on('error', (e) => log('IM 错误', e.message));
@@ -254,14 +262,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const forceNow = forceUntil > Date.now();
 
   // —— 第二优先：普通消息 ——
-  const minAge = (hostAlive && !forceNow) ? REPLY_WINDOW_MIN : 0.1;   // 接管模式下立刻回，不再避让
+  // 本地在线且未强制接管时留 6 分钟避让；接管/离线时立即回，不再用 0.1 分钟门槛把刚到的消息卡成“不可回”。
+  const minAge = (hostAlive && !forceNow) ? REPLY_WINDOW_MIN : 0;   // 接管模式下立刻回，不再避让
   const ripe = got.filter((x) => withinWindow(x) && !(SWITCH_RE.test(x.text) || BACK_RE.test(x.text) || HELP_RE.test(x.text)))
     .filter((x) => {
+      if (x.tsMissing) return true;  // 没有时间戳时宁可回，也不能再静默吞掉
       const age = (nowSec - x.ts) / 60;
       return age >= minAge;
     });
 
-  log('本轮收到', got.length, '条；可回', ripe.length, '条；云主机在线=', hostAlive, '强制接管=', forceNow, '已处理命令=', handled);
+  const tsMissingCount = got.filter((x) => x.tsMissing).length;
+  log('本轮收到', got.length, '条；可回', ripe.length, '条；时间缺失=', tsMissingCount, '云主机在线=', hostAlive, '强制接管=', forceNow, '已处理命令=', handled);
 
   if (ripe.length && (!hostAlive || forceNow)) {
     for (const m of ripe.slice(-MAX_REPLY)) {
