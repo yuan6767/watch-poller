@@ -1,9 +1,9 @@
 {
   "imSyncKey": 7702,
-  "updated": "2026-11-27T09:46:26.047Z",
+  "updated": "2026-11-27T09:51:15.463Z",
   "got": 0,
   "ripe": 0,
-  "hostAlive": false,
+  "hostAlive": true,
   "forceCloudUntil": 0,
   "lastDieNotice": 1795769557975
 }
